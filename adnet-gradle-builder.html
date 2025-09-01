@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ad Network Gradle Builder</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Malgun Gothic, Helvetica, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; padding: 20px; line-height: 1.5; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 10px; margin-bottom: 16px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+    .row { display:flex; align-items:center; gap:8px; }
+    .muted { color:#6b7280; font-size:13px }
+    .toolbar { display:flex; gap:8px; align-items:center; margin: 16px 0 8px; flex-wrap: wrap;}
+    button { border:1px solid #e5e7eb; background:#fff; padding:8px 12px; border-radius:10px; cursor:pointer }
+    button:hover { background:#f9fafb }
+    pre { background:#0b1021; color:#e5e7eb; padding:16px; border-radius:12px; overflow:auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 13px; }
+    .tag { display:inline-block; padding:2px 6px; border-radius:6px; background:#eef2ff; color:#3730a3; font-size:12px; margin-left:6px;}
+    .small { font-size:12px }
+    .footer { margin-top:6px; color:#94a3b8; font-size:12px}
+    .search { flex:1; min-width: 220px; }
+    input[type="search"] { width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; }
+  </style>
+</head>
+<body>
+  <h1>네트워크 선택 <span class="muted">(체크하면 아래 Gradle 설정이 자동 생성)</span></h1>
+
+  <div class="toolbar">
+    <input id="search" class="search" type="search" placeholder="네트워크 검색 (예: moloco, unity, meta)"/>
+    <button id="selectAll">전체 선택</button>
+    <button id="clearAll">전체 해제</button>
+    <button id="copyBtn">코드 복사</button>
+    <span class="muted small">※ 좌측 검색으로 필터링 후 ‘전체 선택’ 가능</span>
+  </div>
+
+  <div id="list" class="grid"></div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <strong>build.gradle (모듈) 예시</strong>
+      <span class="muted small">repositories / dependencies 자동 생성</span>
+    </div>
+    <pre><code id="output"></code></pre>
+    <div class="footer">버전/좌표는 예시입니다. 실서비스에 맞게 아래 데이터 맵만 수정하세요.</div>
+  </div>
+
+<script>
+/**
+ * 1) 여기를 여러분 환경에 맞게 업데이트 하세요.
+ * - repo: 필요한 저장소(JCenter는 보통 미사용). 없으면 mavenCentral만으로도 충분.
+ * - coord: 의존성 group:artifact:version
+ * - tag: 보조 표기
+ */
+const NETWORKS = [
+  { id:"applovin",  name:"AppLovin",        coord:"com.google.ads.mediation:applovin:13.0.1.0",  repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"chartboost",name:"Chartboost",      coord:"com.google.ads.mediation:chartboost:9.9.0.0", repo:"mavenCentral", tag:"Waterfall" },
+  { id:"dtex",      name:"DT Exchange",     coord:"com.google.ads.mediation:fyber:8.3.5.0",      repo:"mavenCentral", tag:"Bidding" },
+  { id:"imobile",   name:"i-mobile",        coord:"com.google.ads.mediation:imobile:2.0.31.0",   repo:"mavenCentral", tag:"Waterfall" },
+  { id:"inmobi",    name:"InMobi",          coord:"com.google.ads.mediation:inmobi:10.7.6.0",    repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"ironsrc",   name:"ironSource Ads",  coord:"com.google.ads.mediation:ironsource:8.4.0.0", repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"liftoff",   name:"Liftoff Monetize",coord:"com.google.ads.mediation:vungle:7.6.3.1",     repo:"mavenCentral", tag:"Waterfall" },
+  { id:"line",      name:"LINE Ads Network",coord:"com.google.ads.mediation:line:4.11.0.0",      repo:"mavenCentral", tag:"Waterfall" },
+  { id:"maio",      name:"maio",            coord:"com.google.ads.mediation:maio:1.1.16.0",      repo:"mavenCentral", tag:"Waterfall" },
+  { id:"meta",      name:"Meta (Audience Network)", coord:"com.google.ads.mediation:facebook:6.16.0.0", repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"mintegral", name:"Mintegral",       coord:"com.google.ads.mediation:mintegral:16.8.61.0",repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"moloco",    name:"Moloco",          coord:"com.google.ads.mediation:moloco:2.5.0.0",     repo:"mavenCentral", tag:"Bidding" },
+  { id:"mytarget",  name:"myTarget",        coord:"com.google.ads.mediation:mytarget:5.27.2.0",  repo:"mavenCentral", tag:"Waterfall" },
+  { id:"pangle",    name:"Pangle",          coord:"com.google.ads.mediation:pangle:6.3.0.9.0",   repo:"mavenCentral", tag:"Bidding/Waterfall" },
+  { id:"unity",     name:"Unity Ads",       coord:"com.google.ads.mediation:unity:4.12.2.0",     repo:"mavenCentral", tag:"Bidding/Waterfall" },
+];
+
+/** 2) UI 렌더 */
+const list = document.getElementById("list");
+const output = document.getElementById("output");
+const copyBtn = document.getElementById("copyBtn");
+const search = document.getElementById("search");
+
+function renderList(filter="") {
+  list.innerHTML = "";
+  const f = filter.trim().toLowerCase();
+  for (const n of NETWORKS) {
+    const visible = !f || n.name.toLowerCase().includes(f) || n.id.includes(f) || n.coord.includes(f);
+    if (!visible) continue;
+    const card = document.createElement("label");
+    card.className = "card row";
+    card.innerHTML = `
+      <input type="checkbox" data-id="${n.id}" />
+      <div>
+        <div><strong>${n.name}</strong> <span class="tag">${n.tag}</span></div>
+        <div class="muted small">${n.coord}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  }
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.addEventListener("change", updateGradle));
+}
+
+function selectedNetworks() {
+  const ids = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.dataset.id);
+  return NETWORKS.filter(n => ids.includes(n.id));
+}
+
+/** 3) 코드 생성 */
+function genGradle() {
+  const sel = selectedNetworks();
+  const repos = new Set(sel.map(n => n.repo).filter(Boolean));
+  // repositories 블록 (mavenCentral은 기본 포함 가정)
+  const repoLines = ["google()", "mavenCentral()"];
+  for (const r of repos) {
+    if (r === "google" || r === "mavenCentral") continue;
+    repoLines.push(r + "()");
+  }
+  // dependencies 블록
+  const depLines = sel.map(n => `    implementation '${n.coord}'`);
+  return `repositories {
+    ${repoLines.join("\n    ")}
+}
+
+dependencies {
+${depLines.length ? depLines.join("\n") : "    // 선택된 네트워크가 없습니다."}
+}`;
+}
+
+function updateGradle() {
+  output.textContent = genGradle();
+}
+
+/** 4) Actions */
+document.getElementById("selectAll").addEventListener("click", () => {
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  updateGradle();
+});
+document.getElementById("clearAll").addEventListener("click", () => {
+  list.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  updateGradle();
+});
+copyBtn.addEventListener("click", async () => {
+  const text = output.textContent;
+  try { await navigator.clipboard.writeText(text); copyBtn.textContent = "복사됨!"; setTimeout(()=>copyBtn.textContent="코드 복사",1200); }
+  catch { alert("복사 실패: 수동으로 선택해 복사하세요."); }
+});
+search.addEventListener("input", (e) => renderList(e.target.value));
+
+/** 초기 렌더 */
+renderList();
+updateGradle();
+</script>
+</body>
+</html>
